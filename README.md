@@ -1,6 +1,7 @@
 # CoyoStim
 
-This library lets you control the DG-Labs 2.0 estim box (aka Coyote) with ESP-32 based boards.
+This library lets you control the DG-Labs 2.0 estim box (aka Coyote) with ESP-32 based boards. It doesn't
+yet support the newer [3.0](https://dungeon-lab.com/home.php?ref=ymqxmdh) version.
 
 The DG-Labs eStim box is popular but requires you to use
 a phone app to control it. This library facilitates the development of
