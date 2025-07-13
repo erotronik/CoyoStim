@@ -12,21 +12,21 @@
 #include <map>
 #include <freertos/timers.h>
 
-constexpr uint8_t COYOTE_SERVICE_UUID[] = { 0xad, 0xe8, 0xf3, 0xd4, 0xb8, 0x84, 0x94, 0xa0, 0xaa, 0xf5, 0xe2, 0x0f, 0x0b, 0x18, 0x5a, 0x95 };
-constexpr uint8_t CONFIG_CHAR_UUID[] = { 0xad, 0xe8, 0xf3, 0xd4, 0xb8, 0x84, 0x94, 0xa0, 0xaa, 0xf5, 0xe2, 0x0f, 0x07, 0x15, 0x5a, 0x95 };
-constexpr uint8_t POWER_CHAR_UUID[] = { 0xad, 0xe8, 0xf3, 0xd4, 0xb8, 0x84, 0x94, 0xa0, 0xaa, 0xf5, 0xe2, 0x0f, 0x04, 0x15, 0x5a, 0x95 };
-constexpr uint8_t A_CHAR_UUID[] = { 0xad, 0xe8, 0xf3, 0xd4, 0xb8, 0x84, 0x94, 0xa0, 0xaa, 0xf5, 0xe2, 0x0f, 0x06, 0x15, 0x5a, 0x95 };
-constexpr uint8_t B_CHAR_UUID[] = { 0xad, 0xe8, 0xf3, 0xd4, 0xb8, 0x84, 0x94, 0xa0, 0xaa, 0xf5, 0xe2, 0x0f, 0x05, 0x15, 0x5a, 0x95 };
-constexpr uint8_t BATTERY_UUID[] = { 0xad, 0xe8, 0xf3, 0xd4, 0xb8, 0x84, 0x94, 0xa0, 0xaa, 0xf5, 0xe2, 0x0f, 0x0a, 0x18, 0x5a, 0x95 };
-constexpr uint8_t BATTERY_CHAR_UUID[] = { 0xad, 0xe8, 0xf3, 0xd4, 0xb8, 0x84, 0x94, 0xa0, 0xaa, 0xf5, 0xe2, 0x0f, 0x00, 0x15, 0x5a, 0x95 };
+// Coyote2
+NimBLEUUID COYOTE_SERVICE_BLEUUID("955a180b-0fe2-f5aa-a094-84b8d4f3e8ad");
+NimBLEUUID CONFIG_CHAR_BLEUUID("955a1507-0fe2-f5aa-a094-84b8d4f3e8ad");
+NimBLEUUID POWER_CHAR_BLEUUID("955a1504-0fe2-f5aa-a094-84b8d4f3e8ad");
+NimBLEUUID A_CHAR_BLEUUID("955a1506-0fe2-f5aa-a094-84b8d4f3e8ad");
+NimBLEUUID B_CHAR_BLEUUID("955a1505-0fe2-f5aa-a094-84b8d4f3e8ad");
+NimBLEUUID BATTERY_SERVICE_BLEUUID("955a180a-0fe2-f5aa-a094-84b8d4f3e8ad");
+NimBLEUUID BATTERY_CHAR_BLEUUID("955a1500-0fe2-f5aa-a094-84b8d4f3e8ad");
 
-NimBLEUUID COYOTE_SERVICE_BLEUUID(COYOTE_SERVICE_UUID, 16, false);
-NimBLEUUID CONFIG_CHAR_BLEUUID(CONFIG_CHAR_UUID, 16, false);
-NimBLEUUID POWER_CHAR_BLEUUID(POWER_CHAR_UUID, 16, false);
-NimBLEUUID A_CHAR_BLEUUID(A_CHAR_UUID, 16, false);
-NimBLEUUID B_CHAR_BLEUUID(B_CHAR_UUID, 16, false);
-NimBLEUUID BATTERY_SERVICE_BLEUUID(BATTERY_UUID, 16, false);
-NimBLEUUID BATTERY_CHAR_BLEUUID(BATTERY_CHAR_UUID, 16, false);
+// Coyote3
+NimBLEUUID COYOTE3_SERVICE_BLEUUID("180c");
+NimBLEUUID COYOTE3_TX_BLEUUID("150a");
+NimBLEUUID COYOTE3_NOTIFY_BLEUUID("150b");
+NimBLEUUID COYOTE3_BATSERVICE_BLEUUID("180a");
+NimBLEUUID COYOTE3_BAT_BLEUUID("1500");
 
 std::map<TimerHandle_t, Coyote*> coyote_timer_map;
 
@@ -35,7 +35,11 @@ CoyoteChannel::CoyoteChannel(Coyote& c, std::string name) : parent(c), channel_n
 bool Coyote::is_coyote(NimBLEAdvertisedDevice* advertisedDevice) {
   auto ble_manufacturer_specific_data = advertisedDevice->getManufacturerData();
   if (ble_manufacturer_specific_data.length() > 2 && ble_manufacturer_specific_data[1] == 0x19 && ble_manufacturer_specific_data[0] == 0x96) {
-    ESP_LOGI("coyote", "Found DG-LAB");
+    ESP_LOGI("coyote", "Found Coyote 2");
+    return true;
+  }
+  if (!strcmp(advertisedDevice->getName().c_str(),"47L121000")) {
+    ESP_LOGI("coyote", "Found Coyote 3");
     return true;
   }
   return false;
@@ -183,6 +187,51 @@ void Coyote::timer_callback(TimerHandle_t xTimerID) {
   if (!coyote_connected)
     return;
 
+  if (coyote_version == 3) {
+    std::vector<uint8_t> buf(20);
+
+    // 0xB0 (1-byte command HEAD) + serial number (4 bits) + intensity value interpretation method (4 bits) + A channel intensity setting value (1 byte) + B channel intensity setting value (1 byte)
+    // + A channel waveform frequency 4 lines (4 bytes) + A channel waveform intensity 4 lines (4 bytes) + B channel waveform frequency 4 lines (4 bytes) + B channel waveform intensity 4 lines (4 bytes)
+
+    buf[0] = 0xb0;
+
+    // The 4 bits of intensity value interpretation are divided into two parts. The upper two bits represent the interpretation of channel A, and the lower two bits represent the interpretation of channel B.
+    // 0b11 -> represents that the intensity of the corresponding channel changes absolutely. If the intensity setting value of channel A is 32, then the intensity of channel A is set to 32.
+
+    buf[1] = 0xf;
+
+    // The channel strength setting value is 1 byte long, with a valid range of (0~200). Values outside the input range are treated as 0. The absolute range of the strength of each channel of the Coyote host is also (0~200).
+
+    buf[2] = channel_a.coyote_power_wanted;
+    buf[3] = channel_b.coyote_power_wanted;
+    channel_a.coyote_power = channel_a.coyote_power_wanted; // since we have to send it all the time anyway, no need to get this by the callback
+    channel_b.coyote_power = channel_b.coyote_power_wanted;
+
+    for (uint8_t p=0;p<4;p++) {
+      channel_a.update_pattern();
+      channel_b.update_pattern();
+      buf[4+p] = channel_a.pattern.frequency;
+      buf[8+p] = channel_a.pattern.amplitude*4;
+      buf[12+p] = channel_b.pattern.frequency;
+      buf[16+p] = channel_b.pattern.amplitude*4;
+    }
+
+    // The channel waveform frequency length is 1 byte, the value range is (10~240), and the channel waveform intensity is 1 byte, the value range is (0~100). In the B0 instruction, 4 sets of
+    // waveform frequencies and waveform intensity are sent to each of the two channels every 100ms. Each set of frequency-intensity represents a 25ms waveform output, and 4 sets of data represent 100ms data.
+    // In the waveform data, if the input value of a channel is not in the valid range, the pulse host will abandon all 4 sets of data of the channel.
+
+    // Tips If you only want to output a waveform to a single channel, enter at least one non-valid data (a waveform intensity value greater than 100) into the data of another channel, as shown in the example above.
+
+    //ESP_LOGD("coyote", "write: %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X",
+    //     buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7], buf[8], buf[9],
+    //     buf[10], buf[11], buf[12], buf[13], buf[14], buf[15], buf[16], buf[17], buf[18], buf[19]);
+
+    if (!coyote3txCharacteristic->writeValue(buf))
+      ESP_LOGE("coyote", "Failed to write pattern");
+
+    return;
+  }
+
   // this sets the power to where we want it (also stop you changing it on the rocker switches)
   if (channel_a.coyote_power != channel_a.coyote_power_wanted || channel_b.coyote_power != channel_b.coyote_power_wanted) {
     auto enc = encode_power(channel_a.coyote_power_wanted, channel_b.coyote_power_wanted);
@@ -196,6 +245,9 @@ void Coyote::timer_callback(TimerHandle_t xTimerID) {
     if (!patternACharacteristic->writeValue(enc))
       ESP_LOGE("coyote", "Failed to write pattern A");
   }
+  channel_a.update_pattern(); // coyote 3 sends 3 times as much data
+  channel_a.update_pattern();
+  channel_a.update_pattern();
 
   // Do WaveB
   channel_b.update_pattern();
@@ -204,6 +256,10 @@ void Coyote::timer_callback(TimerHandle_t xTimerID) {
     if (!patternBCharacteristic->writeValue(enc))
       ESP_LOGE("coyote", "Failed to write pattern B");
   }
+  channel_b.update_pattern(); // coyote 3 sends 3 times as much data
+  channel_b.update_pattern();
+  channel_b.update_pattern();
+
 }
 
 void Coyote::connected_callback() {
@@ -242,7 +298,7 @@ private:
 };
 
 bool Coyote::getService(NimBLERemoteService*& service, NimBLEUUID uuid) {
-  ESP_LOGD("coyote", "Getting service %s", uuid.toString().c_str());
+  ESP_LOGD("coyote", "Getting service '%s'", uuid.toString().c_str());
   service = bleClient->getService(uuid);
   if (service == nullptr) {
     ESP_LOGE("coyote", "Failed to find service UUID: %s", uuid.toString().c_str());
@@ -285,6 +341,13 @@ void Coyote::power_callback(NimBLERemoteCharacteristic* chr, uint8_t* data, size
     ESP_LOGE("coyote", "Power callback with incorrect length");
 }
 
+void Coyote::coyote3_callback(NimBLERemoteCharacteristic* chr, uint8_t* data, size_t length, bool isNotify) {
+  if (length == 4 ) {
+    //ESP_LOGD("coyote","coyote3 callback  %x %x %x %x",data[0], data[1],data[2],data[3]);  // b1 (serial) A power B power
+  }
+}
+
+
 Coyote::Coyote() : channel_a(*this, "a"), channel_b(*this, "b") {
 }
 
@@ -300,6 +363,12 @@ Coyote::~Coyote() {
 bool Coyote::connect_to_device(NimBLEAdvertisedDevice* coyote_device) {
   if (coyote_connected)
     return false;
+
+  if (!strcmp(coyote_device->getName().c_str(),"47L121000")) {
+    coyote_version = 3;
+  } else {
+    coyote_version = 2;
+  }
 
   if (!bleClient) {
     bleClient = NimBLEDevice::createClient();
@@ -319,15 +388,21 @@ bool Coyote::connect_to_device(NimBLEAdvertisedDevice* coyote_device) {
     ESP_LOGI("coyote", "reconnect finished");
   } else {
     connection_fully_established = false;
-    ESP_LOGI("coyote", "Will try to connect to Coyote at %s", coyote_device->getAddress().toString().c_str());
+    ESP_LOGI("coyote", "Will try to connect to Coyote %d at %s", coyote_version, coyote_device->getAddress().toString().c_str());
     if (!bleClient->connect(coyote_device)) {
       ESP_LOGE("coyote", "Connection failed");
       return false;
     }
     ESP_LOGI("coyote", "Connection established");
 
-    res &= getService(coyoteService, COYOTE_SERVICE_BLEUUID);
-    res &= getService(batteryService, BATTERY_SERVICE_BLEUUID);
+    if (coyote_version == 2) {
+      res &= getService(coyoteService, COYOTE_SERVICE_BLEUUID);
+      res &= getService(batteryService, BATTERY_SERVICE_BLEUUID);
+    } else {
+      res &= getService(coyoteService, COYOTE3_SERVICE_BLEUUID);
+      res &= getService(batteryService, COYOTE3_BATSERVICE_BLEUUID);
+    }
+
 
     if (res == false) {
       ESP_LOGE("coyote", "Missing service");
@@ -336,12 +411,18 @@ bool Coyote::connect_to_device(NimBLEAdvertisedDevice* coyote_device) {
     }
   }
   
+  if (coyote_version == 2) {
   // call when reconnecting to re-attach notifications
-  res &= getCharacteristic(batteryService, batteryLevelCharacteristic, BATTERY_CHAR_BLEUUID, std::bind(&Coyote::batterylevel_callback, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
-  res &= getCharacteristic(coyoteService, configCharacteristic, CONFIG_CHAR_BLEUUID);
-  res &= getCharacteristic(coyoteService, powerCharacteristic, POWER_CHAR_BLEUUID, std::bind(&Coyote::power_callback, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
-  res &= getCharacteristic(coyoteService, patternACharacteristic, A_CHAR_BLEUUID);
-  res &= getCharacteristic(coyoteService, patternBCharacteristic, B_CHAR_BLEUUID);
+    res &= getCharacteristic(batteryService, batteryLevelCharacteristic, BATTERY_CHAR_BLEUUID, std::bind(&Coyote::batterylevel_callback, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
+    res &= getCharacteristic(coyoteService, configCharacteristic, CONFIG_CHAR_BLEUUID);
+    res &= getCharacteristic(coyoteService, powerCharacteristic, POWER_CHAR_BLEUUID, std::bind(&Coyote::power_callback, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
+    res &= getCharacteristic(coyoteService, patternACharacteristic, A_CHAR_BLEUUID);
+    res &= getCharacteristic(coyoteService, patternBCharacteristic, B_CHAR_BLEUUID);
+  } else {
+    res &= getCharacteristic(batteryService, batteryLevelCharacteristic, COYOTE3_BAT_BLEUUID, std::bind(&Coyote::batterylevel_callback, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
+    res &= getCharacteristic(coyoteService, coyote3txCharacteristic, COYOTE3_TX_BLEUUID);
+    res &= getCharacteristic(coyoteService, coyote3notifyCharacteristic, COYOTE3_NOTIFY_BLEUUID, std::bind(&Coyote::coyote3_callback, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
+  }
 
   if (res == false) {
     ESP_LOGE("coyote", "Missing characteristic");
@@ -355,32 +436,48 @@ bool Coyote::connect_to_device(NimBLEAdvertisedDevice* coyote_device) {
   coyote_batterylevel = batteryLevelCharacteristic->readValue<uint8_t>();
   ESP_LOGD("coyote", "Battery level: %u", coyote_batterylevel);
 
-  auto configData = configCharacteristic->readValue();
-  coyote_maxPower = (configData[2] & 0xf) * 256 + configData[1];
-  ESP_LOGD("coyote", "coyote maxPower: %d", coyote_maxPower);
-  coyote_maxPower *= (double)coyote_max_power_percent/100;
-  ESP_LOGD("coyote", "coyote maxPower clamped to: %d", coyote_maxPower);
-  coyote_powerStep = configData[0];
-  ESP_LOGD("coyote", "coyote powerStep: %d", coyote_powerStep);
-
-  auto powerData = powerCharacteristic->readValue();
-  if (powerData.size() >= 3)
-    parse_power({powerData.begin(), powerData.end()});
-
-  ESP_LOGD("coyote", "read pattern a");
-  auto patternAData = patternACharacteristic->readValue();
-  ESP_LOGD("coyote", "read pattern b");
-  auto patternBData = patternBCharacteristic->readValue();
-  if (patternAData.size() < 3 || patternBData.size() < 3) {
-    ESP_LOGE("coyote", "No pattern data?");
+  if (coyote_version ==3) {
+    coyote_maxPower = 200; // always send 0-200 because below commands reduce it
+    std::vector<uint8_t> buf(7);
+    buf[0] = 0xbf;
+    buf[1] = coyote_maxPower * (double)coyote_max_power_percent / 100;
+    buf[2] = buf[1];
+    buf[3] = 160; buf[4] = buf[3]; // affect freq balance
+    buf[5] = 0; buf[6] = buf[5]; // affect pulse width
+    if (!coyote3txCharacteristic->writeValue(buf)) {
+      ESP_LOGE("coyote", "Failed to write initial levels");
+    }
+  // 0xBF (1-byte command HEAD) + AB channel strength soft upper limit (2 bytes) + AB channel waveform frequency balance parameter (2 bytes) + AB channel waveform strength balance parameter (2 bytes)
   }
-  channel_a.pattern = parse_pattern({patternAData.begin(), patternAData.end()});
-  channel_b.pattern = parse_pattern({patternBData.begin(), patternBData.end()});
 
-  auto buf = encode_power(start_power, start_power);
-  if (!powerCharacteristic->writeValue(buf))
-    ESP_LOGE("coyote", "Failed to write powerCharacteristic");
 
+  if (coyote_version ==2) {
+    auto configData = configCharacteristic->readValue();
+    coyote_maxPower = (configData[2] & 0xf) * 256 + configData[1];
+    ESP_LOGD("coyote", "coyote maxPower: %d", coyote_maxPower);
+    coyote_maxPower *= (double)coyote_max_power_percent/100;
+    ESP_LOGD("coyote", "coyote maxPower clamped to: %d", coyote_maxPower);
+    coyote_powerStep = configData[0];
+    ESP_LOGD("coyote", "coyote powerStep: %d", coyote_powerStep);
+
+    auto powerData = powerCharacteristic->readValue();
+    if (powerData.size() >= 3)
+      parse_power({powerData.begin(), powerData.end()});
+
+    ESP_LOGD("coyote", "read pattern a");
+    auto patternAData = patternACharacteristic->readValue();
+    ESP_LOGD("coyote", "read pattern b");
+    auto patternBData = patternBCharacteristic->readValue();
+    if (patternAData.size() < 3 || patternBData.size() < 3) {
+      ESP_LOGE("coyote", "No pattern data?");
+    }
+    channel_a.pattern = parse_pattern({patternAData.begin(), patternAData.end()});
+    channel_b.pattern = parse_pattern({patternBData.begin(), patternBData.end()});
+
+    auto buf = encode_power(start_power, start_power);
+    if (!powerCharacteristic->writeValue(buf))
+      ESP_LOGE("coyote", "Failed to write powerCharacteristic");
+  }
   channel_a.wavemode = M_NONE;
   channel_b.wavemode = M_NONE;
 

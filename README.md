@@ -1,7 +1,8 @@
 # CoyoStim
 
-This library lets you control the DG-Labs 2.0 estim box (aka Coyote) with ESP-32 based boards. It doesn't
-yet support the newer [3.0](https://dungeon-lab.com/home.php?ref=ymqxmdh) version.
+This library lets you control the [DG-Labs 2.0 or 3.0 estim
+box](https://dungeon-lab.com/home.php?ref=ymqxmdh) (aka Coyote) with
+ESP-32 based boards.
 
 The DG-Labs eStim box is popular but requires you to use
 a phone app to control it. This library facilitates the development of
@@ -11,7 +12,7 @@ For an example project using this library, please look at [pulsemote](https://gi
 
 # Notes
 
-* The DG-Labs 2.0 box has no authentication or pairing, so if you use
+* The DG-Labs boxes have no authentication or pairing, so if you use
 one in a setting where there are other people please be aware that anyone
 can take control of it if it's
 not connected to any other client at the time. Make sure you are connecting
@@ -21,7 +22,7 @@ to the right box!
 "waves" mode.
 New modes can be added via a callback function.
 
-* The maximum output is capped at 50% but that's a level in the code that can be changed.
+* The maximum output is capped at 80% but that's a level in the code that can be changed.
 
 # Requirements
 

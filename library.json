@@ -11,5 +11,5 @@
         "type": "git",
         "url": "https://github.com/erotronik/coyostim.git"
     },
-    "description": "A library to control eStim boxes like the DG-Labs 2.0 with ESP32 based controllers."
+    "description": "A library to control eStim boxes like the DG-Labs 2.0 and 3.0 (Coyote) with ESP32 based controllers."
 }

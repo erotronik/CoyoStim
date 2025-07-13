@@ -11,9 +11,10 @@ class Coyote;
 
 // The maximum outut is quite high. Limit to x% instead and adjust all display and set
 // options respectively
-constexpr int coyote_max_power_percent = 50;
+constexpr int coyote_max_power_percent = 80;
 
 struct coyote_pattern {
+    int frequency = 0; // for coyote3
     int pulse_length = 0; // 0-31 ms
     int pause_length = 0; // 0-1023 ms
     int amplitude = 0; // 0-31
@@ -68,6 +69,7 @@ public:
 
     bool get_isconnected();
     bool connect_to_device(NimBLEAdvertisedDevice* coyote_device);
+    int getmodel() {return coyote_version;};
 
     uint8_t get_batterylevel();
     void setup();
@@ -85,6 +87,7 @@ private:
 
     void batterylevel_callback(NimBLERemoteCharacteristic* chr, uint8_t* data, size_t length, bool isNotify);
     void power_callback(NimBLERemoteCharacteristic* chr, uint8_t* data, size_t length, bool isNotify);
+    void coyote3_callback(NimBLERemoteCharacteristic* chr, uint8_t* data, size_t length, bool isNotify);
 
     void parse_power(const std::vector<uint8_t>);
     static std::vector<uint8_t> encode_power(int xpowerA, int xpowerB);
@@ -98,6 +101,7 @@ private:
     void disconnected_callback(int reason);
     void notify(coyote_type_of_change);
 
+    uint8_t coyote_version = 0;
     uint8_t coyote_powerStep = 0;
     uint8_t coyote_batterylevel = 0;
     uint16_t coyote_maxPower = 1;
@@ -115,6 +119,10 @@ private:
     NimBLERemoteService* batteryService;
     // deletion handled by batteryService
     NimBLERemoteCharacteristic* batteryLevelCharacteristic;
+
+    NimBLERemoteCharacteristic* coyote3txCharacteristic;
+    NimBLERemoteCharacteristic* coyote3notifyCharacteristic;
+
 
     coyote_callback update_callback;
     bool connection_fully_established = false;
