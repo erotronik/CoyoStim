@@ -6,6 +6,8 @@
 // every 25mS. So alter all the routines to expect to be called at 25mS and
 // if the device is a coyote2 we will skip some
 
+// So now amplitude is 0-100 (for coyote2 is mapped to 0-20)
+
 #pragma once
 
 #include "coyote.hpp"
@@ -35,8 +37,8 @@ coyote_pattern coyote_mode_breath(uint32_t &waveclock, uint32_t &cyclecount) {
     out.pulse_length = 1;
     out.pause_length = 9;
     out.frequency = 10; // could work this out from pulse/pause also but...
-    out.amplitude = waveclock;
-    if (out.amplitude > 20) out.amplitude = 20;
+    out.amplitude = waveclock*4;
+    if (out.amplitude > 100) out.amplitude = 100;
   }
   (waveclock)++;
   if (waveclock > (7+3)*4) {
@@ -52,7 +54,7 @@ coyote_pattern coyote_mode_waves(uint32_t &waveclock, uint32_t &cyclecount) {
   constexpr uint16_t rampUpTime = 30*4;
   constexpr uint16_t rampDownTime = 50*4;
   constexpr uint16_t cycleTime = rampUpTime + rampDownTime;
-  constexpr uint16_t maxAmp = 20;
+  constexpr uint16_t maxAmp = 100;
   // double piOverTwo = std::atan(1) * 2; // incorrectly not marked constexpr in stdlib
   constexpr double piOverTwo = M_PI_2;
 

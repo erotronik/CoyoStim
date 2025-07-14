@@ -141,8 +141,8 @@ std::vector<uint8_t> Coyote::encode_power(int xpowerA, int xpowerB) {
 std::vector<uint8_t> Coyote::encode_pattern(coyote_pattern pattern) {
   std::vector<uint8_t> buf(3);
   // flipFirstAndThirdByte(zero(4) ~ uint(5).as("az") ~ uint(10).as("ay") ~ uint(5).as("ax"))
-  buf[2] = (pattern.amplitude & 0b11111) >> 1;
-  buf[1] = ((pattern.amplitude & 0b1) * 128) | ((pattern.pause_length & 0b1111111000) >> 3);
+  buf[2] = (pattern.amplitude/4 & 0b11111) >> 1;
+  buf[1] = ((pattern.amplitude/4 & 0b1) * 128) | ((pattern.pause_length & 0b1111111000) >> 3);
   buf[0] = (pattern.pulse_length & 0b11111) | ((pattern.pause_length & 0b111) << 5);
   //Serial.printf("encode pattern %02x %02x %02x ax=%d ay=%d az=%d\n", buf[2],buf[1],buf[0],ax,ay,az);
   return buf;
@@ -151,7 +151,7 @@ std::vector<uint8_t> Coyote::encode_pattern(coyote_pattern pattern) {
 coyote_pattern Coyote::parse_pattern(const std::vector<uint8_t> buf) {
   coyote_pattern out;
   // flipFirstAndThirdByte(zero(4) ~ uint(5).as("az") ~ uint(10).as("ay") ~ uint(5).as("ax"))
-  out.amplitude = ((buf[2] * 256 + buf[1]) & 0b0000111110000000) >> 7;
+  out.amplitude = 4 * (((buf[2] * 256 + buf[1]) & 0b0000111110000000) >> 7);
   out.pause_length = ((buf[2] * 256 * 256 + buf[1] * 256 + buf[0]) & 0b000000000111111111100000) >> 5;
   out.pulse_length = (buf[0]) & 0b11111;
   //Serial.printf("parse pattern %02x %02x %02x ax=%d ay=%d az=%d\n", buf[2],buf[1],buf[0],*ax,*ay,*az);
@@ -211,9 +211,9 @@ void Coyote::timer_callback(TimerHandle_t xTimerID) {
       channel_a.update_pattern();
       channel_b.update_pattern();
       buf[4+p] = channel_a.pattern.frequency;
-      buf[8+p] = channel_a.pattern.amplitude*4;
+      buf[8+p] = channel_a.pattern.amplitude;
       buf[12+p] = channel_b.pattern.frequency;
-      buf[16+p] = channel_b.pattern.amplitude*4;
+      buf[16+p] = channel_b.pattern.amplitude;
     }
 
     // The channel waveform frequency length is 1 byte, the value range is (10~240), and the channel waveform intensity is 1 byte, the value range is (0~100). In the B0 instruction, 4 sets of
